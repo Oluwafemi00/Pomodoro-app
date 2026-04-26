@@ -1,0 +1,432 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@700&display=swap");
+
+:root {
+  /* Premium Dark Theme Palette */
+  --bg-base: #0f172a; /* Deep slate background */
+  --bg-surface: #1e293b; /* Slightly lighter surface for cards */
+  --bg-input: #334155; /* Input field backgrounds */
+
+  --primary: #10b981; /* High-contrast neon mint for focus */
+  --primary-hover: #059669;
+  --break-color: #6366f1; /* Sharp violet for breaks */
+  --break-hover: #4f46e5;
+  --danger: #ef4444;
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+
+  --border-radius: 12px;
+  --transition-snappy: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+body {
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-container {
+  background: var(--bg-surface);
+  padding: 2.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 550px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.app-header h1 {
+  margin-bottom: 0;
+}
+
+.app-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#install-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--primary);
+  color: var(--bg-base);
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+#install-btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+}
+
+/* Crucial: Keeps the button hidden until the PWA is verified by the browser */
+#install-btn.hidden {
+  display: none;
+}
+
+#volume-btn {
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.5rem;
+  transition: var(--transition-snappy);
+}
+
+#volume-btn:hover {
+  color: var(--primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+#volume-btn.muted {
+  color: var(--danger);
+}
+
+h1 {
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Timer Display Area */
+.timer-section {
+  padding: 2rem;
+  background-color: var(--bg-base);
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  text-align: center;
+  transition: var(--transition-snappy);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.timer-section.break-mode {
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+#active-task-label {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#session-progress-label {
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.break-mode #session-progress-label {
+  color: var(--break-color);
+}
+
+#timer-display {
+  font-family: "JetBrains Mono", monospace; /* Crisp monospace for numbers */
+  font-size: 5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-main);
+  margin-bottom: 2rem;
+  letter-spacing: -0.05em;
+}
+
+/* Controls */
+.timer-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+button {
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition-snappy);
+}
+
+#start-btn {
+  background: var(--primary);
+  color: var(--bg-base);
+}
+#start-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-2px);
+}
+
+#pause-btn,
+#reset-btn {
+  background: var(--bg-input);
+  color: var(--text-main);
+}
+#pause-btn:hover:not(:disabled),
+#reset-btn:hover:not(:disabled) {
+  background: #475569;
+  transform: translateY(-2px);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+hr {
+  border: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 2rem 0;
+}
+
+/* CSS Grid Input Section */
+.task-input-section {
+  display: grid;
+  grid-template-columns: 3fr 1fr 1fr 1fr auto;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  align-items: end; /* Aligns the button with the inputs, not the labels */
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 0.35rem;
+  min-width: 0; /* Keeps the grid from blowing out */
+}
+
+.input-group label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-left: 0.2rem;
+}
+
+.btn-group {
+  padding-bottom: 0px; /* Ensures the button sits flush with the inputs */
+}
+
+@media (max-width: 600px) {
+  .task-input-section {
+    grid-template-columns: 1fr 1fr;
+  }
+  .task-name-group,
+  .btn-group {
+    grid-column: span 2;
+  }
+  .btn-group button {
+    width: 100%;
+  }
+}
+
+input {
+  background: var(--bg-input);
+  color: var(--text-main);
+  padding: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: var(--transition-snappy);
+  outline: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+#add-task-btn {
+  background: var(--text-main);
+  color: var(--bg-base);
+  padding: 0.75rem 1.25rem;
+}
+#add-task-btn:hover {
+  background: #e2e8f0;
+  transform: translateY(-2px);
+}
+
+/* Task List */
+#task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.task-item {
+  background: var(--bg-base);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: var(--transition-snappy);
+}
+
+.task-item:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(4px);
+}
+
+.task-item .task-name {
+  font-weight: 500;
+  font-size: 1rem;
+}
+.task-item .task-name.fully-completed {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.task-item .task-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+
+.session-tracker {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.session-marker {
+  background: var(--bg-input);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.completed-session {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.task-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.btn-load {
+  background: var(--bg-input);
+  color: var(--text-main);
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+}
+.btn-load:hover:not(:disabled) {
+  background: #475569;
+}
+
+.btn-delete {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+}
+.btn-delete:hover {
+  background: var(--danger);
+  color: white;
+}
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(4px);
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay.show {
+  display: flex;
+  opacity: 1;
+}
+
+.modal-content {
+  background: var(--bg-surface);
+  padding: 2.5rem;
+  border-radius: var(--border-radius);
+  text-align: center;
+  width: 90%;
+  max-width: 400px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transform: translateY(20px);
+  transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.modal-overlay.show .modal-content {
+  transform: translateY(0);
+}
+.modal-content h3 {
+  color: var(--text-main);
+  margin-top: 0;
+  font-size: 1.25rem;
+}
+.modal-content p {
+  color: var(--text-muted);
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+.modal-content button {
+  background: var(--primary);
+  color: var(--bg-base);
+  width: 100%;
+  padding: 1rem;
+}
+.modal-content button:hover {
+  background: var(--primary-hover);
+}
+
+/* Responsive Grid for mobile */
+@media (max-width: 600px) {
+  .task-input-section {
+    grid-template-columns: 1fr 1fr;
+  }
+  #task-input,
+  #add-task-btn {
+    grid-column: span 2;
+  }
+}
