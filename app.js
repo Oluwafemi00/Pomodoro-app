@@ -35,7 +35,7 @@ const dom = {
 };
 
 // --- Audio Setup ---
-// Using a clean, premium-sounding chime
+
 const alertSound = new Audio(
   "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
 );

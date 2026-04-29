@@ -79,7 +79,7 @@ body {
   transform: translateY(-2px);
 }
 
-/* Crucial: Keeps the button hidden until the PWA is verified by the browser */
+/* Keeps the button hidden until the PWA is verified by the browser */
 #install-btn.hidden {
   display: none;
 }
