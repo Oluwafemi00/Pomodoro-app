@@ -1,358 +1,325 @@
-// --- State Variables ---
+// --- STATE ---
 let tasks = [];
 let activeTimerId = null;
 let currentSecondsLeft = 0;
 let initialSeconds = 0;
 let activeTaskId = null;
 let currentMode = "focus";
-let expectedEndTime = null; // NEW: Tracks actual completion time
+let expectedEndTime = null;
+let isMuted = false;
 
-// --- DOM Elements ---
-const dom = {
-  inputs: {
-    task: document.getElementById("task-input"),
-    time: document.getElementById("time-input"),
-    break: document.getElementById("break-input"),
-    sessions: document.getElementById("sessions-input"),
-    addBtn: document.getElementById("add-task-btn"),
-  },
-  timer: {
-    section: document.getElementById("timer-section"),
-    display: document.getElementById("timer-display"),
-    activeLabel: document.getElementById("active-task-label"),
-    progressLabel: document.getElementById("session-progress-label"),
-    startBtn: document.getElementById("start-btn"),
-    pauseBtn: document.getElementById("pause-btn"),
-    resetBtn: document.getElementById("reset-btn"),
-  },
-  list: document.getElementById("task-list"),
-  modal: {
-    overlay: document.getElementById("custom-modal"),
-    title: document.getElementById("modal-title"),
-    message: document.getElementById("modal-message"),
-    btn: document.getElementById("modal-btn"),
-  },
-};
+// --- CIRC = 2πr = 2 * π * 85 ≈ 534 ---
+const CIRC = 2 * Math.PI * 85;
 
-// --- Audio Setup ---
+// --- DOM ---
+const timerDisplay = document.getElementById("timer-display");
+const sessionSub = document.getElementById("session-sub");
+const taskLabel = document.getElementById("task-label");
+const timerSection = document.getElementById("timer-section");
+const modePill = document.getElementById("mode-pill");
+const modePillTxt = document.getElementById("mode-pill-text");
+const ringFill = document.getElementById("ring-fill");
+const startBtn = document.getElementById("start-btn");
+const pauseBtn = document.getElementById("pause-btn");
+const resetBtn = document.getElementById("reset-btn");
+const taskInput = document.getElementById("task-input");
+const timeInput = document.getElementById("time-input");
+const breakInput = document.getElementById("break-input");
+const sessionsInput = document.getElementById("sessions-input");
+const addTaskBtn = document.getElementById("add-task-btn");
+const taskListEl = document.getElementById("task-list");
+const tasksCount = document.getElementById("tasks-count");
+const modalOverlay = document.getElementById("modal-overlay");
+const modalIcon = document.getElementById("modal-icon");
+const modalTitle = document.getElementById("modal-title");
+const modalMsg = document.getElementById("modal-msg");
+const modalBtn = document.getElementById("modal-btn");
+const toastEl = document.getElementById("toast");
+const volumeBtn = document.getElementById("volume-btn");
+const volIcon = document.getElementById("vol-icon");
 
+// --- AUDIO ---
 const alertSound = new Audio(
   "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
 );
-alertSound.volume = 0.6; // Keep it slightly muted so it isn't jarring
-
-let isMuted = false;
-const volumeBtn = document.getElementById("volume-btn");
+alertSound.volume = 0.55;
 
 volumeBtn.addEventListener("click", () => {
   isMuted = !isMuted;
   alertSound.muted = isMuted;
-
-  // Toggle the SVG visually
   volumeBtn.classList.toggle("muted", isMuted);
   if (isMuted) {
-    volumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
+    volIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>`;
   } else {
-    volumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`;
+    volIcon.innerHTML = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>`;
   }
 });
 
-// --- Initialization ---
-// --- IndexedDB Setup ---
-const DB_NAME = "PomodoroDB";
-const DB_VERSION = 1;
-const STORE_NAME = "tasks";
+// --- INDEXEDDB ---
+const DB_NAME = "FocusPomoDB",
+  STORE = "tasks";
 let db;
 
 function initDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = (e) => reject("IndexedDB Error: " + e.target.errorCode);
-
-    request.onsuccess = (e) => {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onerror = (e) => rej(e);
+    req.onsuccess = (e) => {
       db = e.target.result;
-      resolve(db);
+      res(db);
     };
-
-    request.onupgradeneeded = (e) => {
-      const database = e.target.result;
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "id" });
-      }
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE))
+        d.createObjectStore(STORE, { keyPath: "id" });
     };
   });
 }
 
-async function saveTasks() {
+function saveTasks() {
   if (!db) return;
-  const tx = db.transaction(STORE_NAME, "readwrite");
-  const store = tx.objectStore(STORE_NAME);
-
-  // Clear the store and re-write the current state to keep it perfectly synced
-  store.clear();
-  tasks.forEach((task) => store.put(task));
+  const tx = db.transaction(STORE, "readwrite"),
+    st = tx.objectStore(STORE);
+  st.clear();
+  tasks.forEach((t) => st.put(t));
 }
 
-async function loadTasksFromDB() {
+function loadTasksFromDB() {
   if (!db) return;
-  const tx = db.transaction(STORE_NAME, "readonly");
-  const store = tx.objectStore(STORE_NAME);
-  const request = store.getAll();
-
-  request.onsuccess = () => {
-    tasks = request.result || [];
+  const tx = db.transaction(STORE, "readonly"),
+    st = tx.objectStore(STORE);
+  const req = st.getAll();
+  req.onsuccess = () => {
+    tasks = req.result || [];
     renderTasks();
   };
 }
 
-// --- Updated Initialization ---
-async function init() {
-  try {
-    await initDB();
-    await loadTasksFromDB();
-    setupKeyboardShortcuts();
-    setupInputEnterKey();
-    registerServiceWorker(); // We will write this next
-  } catch (error) {
-    console.error("Failed to initialize App:", error);
-  }
+// --- TOAST ---
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2400);
 }
 
-function setupInputEnterKey() {
-  const inputs = [
-    dom.inputs.task,
-    dom.inputs.time,
-    dom.inputs.break,
-    dom.inputs.sessions,
-  ];
-
-  inputs.forEach((input) => {
-    input.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault(); // Prevents any default browser behavior
-        addTask();
-      }
-    });
-  });
+// --- MODAL ---
+function showModal(icon, title, msg, btnText, onConfirm) {
+  modalIcon.textContent = icon;
+  modalTitle.textContent = title;
+  modalMsg.textContent = msg;
+  modalBtn.textContent = btnText;
+  modalOverlay.classList.add("show");
+  modalBtn.onclick = () => {
+    modalOverlay.classList.remove("show");
+    if (onConfirm) onConfirm();
+  };
 }
 
-// --- Event Listeners ---
-dom.inputs.addBtn.addEventListener("click", addTask);
-dom.timer.startBtn.addEventListener("click", startTimer);
-dom.timer.pauseBtn.addEventListener("click", pauseTimer);
-dom.timer.resetBtn.addEventListener("click", resetTimer);
-window.addEventListener("DOMContentLoaded", init);
+// --- RING ---
+function updateRing(secondsLeft, total) {
+  const pct = total > 0 ? secondsLeft / total : 0;
+  const offset = CIRC * (1 - pct);
+  ringFill.style.strokeDasharray = CIRC;
+  ringFill.style.strokeDashoffset = offset;
+}
 
-// --- Power User Keyboard Shortcuts ---
-function setupKeyboardShortcuts() {
-  document.addEventListener("keydown", (e) => {
-    // Ignore if user is typing in an input field or modal is open
-    if (
-      e.target.tagName === "INPUT" ||
-      dom.modal.overlay.classList.contains("show")
-    )
-      return;
+// --- TIMER DISPLAY ---
+function renderTime(s) {
+  const m = Math.floor(s / 60),
+    sec = Math.ceil(s % 60);
+  timerDisplay.textContent = `${String(m).padStart(2, "0")}:${String(Math.min(sec, 59)).padStart(2, "0")}`;
+}
 
-    if (e.code === "Space") {
+function updateLabels() {
+  const task = tasks.find((t) => t.id === activeTaskId);
+  if (!task) return;
+  const isFocus = currentMode === "focus";
+  modePillTxt.textContent = isFocus ? "Focus" : "Break";
+  modePill.className = "mode-pill" + (isFocus ? "" : " break");
+  timerSection.classList.toggle("break-mode", !isFocus);
+  ringFill.classList.toggle("break", !isFocus);
+  startBtn.classList.toggle("break-accent", !isFocus);
+  taskLabel.innerHTML = isFocus
+    ? `Focusing on <strong>${task.name}</strong>`
+    : `Break after <strong>${task.name}</strong>`;
+  const done = task.completedSessions,
+    total = task.totalSessions;
+  sessionSub.textContent = isFocus
+    ? `Round ${done + 1} of ${total}`
+    : `Rest up…`;
+}
+
+// --- ADD TASK ---
+addTaskBtn.addEventListener("click", addTask);
+[taskInput, timeInput, breakInput, sessionsInput].forEach((el) =>
+  el.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
       e.preventDefault();
-      if (activeTimerId) pauseTimer();
-      else if (!dom.timer.startBtn.disabled) startTimer();
+      addTask();
     }
+  }),
+);
 
-    if (e.code === "Escape" && !dom.timer.resetBtn.disabled) {
-      resetTimer();
-    }
-  });
-}
-
-// --- Task Management ---
 function addTask() {
-  const name = dom.inputs.task.value.trim();
-  const focusMins = parseInt(dom.inputs.time.value, 10);
-  const breakMins = parseInt(dom.inputs.break.value, 10);
-  const sessions = parseInt(dom.inputs.sessions.value, 10);
-
-  if (!name || isNaN(focusMins) || isNaN(breakMins) || isNaN(sessions)) {
-    alert("Please fill out all fields with valid numbers.");
+  const name = taskInput.value.trim();
+  const focus = parseInt(timeInput.value),
+    brk = parseInt(breakInput.value),
+    rounds = parseInt(sessionsInput.value);
+  if (
+    !name ||
+    isNaN(focus) ||
+    isNaN(brk) ||
+    isNaN(rounds) ||
+    focus < 1 ||
+    brk < 1 ||
+    rounds < 1
+  ) {
+    showToast("Please fill all fields correctly");
     return;
   }
-
-  const newTask = {
+  tasks.push({
     id: Date.now(),
     name,
-    durationMinutes: focusMins,
-    breakMinutes: breakMins,
-    totalSessions: sessions,
+    durationMinutes: focus,
+    breakMinutes: brk,
+    totalSessions: rounds,
     completedSessions: 0,
-  };
-
-  tasks.push(newTask);
+  });
   saveTasks();
-  dom.inputs.task.value = "";
   renderTasks();
-  dom.inputs.task.focus();
+  taskInput.value = "";
+  taskInput.focus();
+  showToast("Task added");
 }
 
+// --- DELETE TASK ---
 function deleteTask(id) {
-  tasks = tasks.filter((task) => task.id !== id);
+  tasks = tasks.filter((t) => t.id !== id);
   saveTasks();
-
   if (activeTaskId === id) {
     pauseTimer();
     activeTaskId = null;
     currentMode = "focus";
-    dom.timer.section.classList.remove("break-mode");
-    dom.timer.activeLabel.textContent = "Ready to Focus?";
-    dom.timer.progressLabel.textContent = "";
-    dom.timer.display.textContent = "00:00";
-    dom.timer.startBtn.disabled = true;
-    dom.timer.resetBtn.disabled = true;
+    timerSection.classList.remove("break-mode");
+    modePillTxt.textContent = "Ready";
+    modePill.className = "mode-pill";
+    taskLabel.textContent = "Add a task below to get started";
+    sessionSub.textContent = "";
+    timerDisplay.textContent = "00:00";
+    ringFill.style.strokeDashoffset = CIRC;
+    startBtn.disabled = true;
+    resetBtn.disabled = true;
   }
   renderTasks();
+  showToast("Task removed");
 }
 
-function renderTasks() {
-  // Clear the current list
-  dom.list.innerHTML = "";
-
-  tasks.forEach((task) => {
-    const li = document.createElement("li");
-    li.className = "task-item";
-
-    const detailsDiv = document.createElement("div");
-    detailsDiv.className = "task-details";
-
-    const nameSpan = document.createElement("span");
-    nameSpan.className = "task-name";
-    nameSpan.textContent = task.name;
-
-    const metaDiv = document.createElement("div");
-    metaDiv.className = "task-meta";
-
-    // Generate Session Markers
-    let sessionsHTML = `<div class="session-tracker">`;
-    for (let i = 1; i <= task.totalSessions; i++) {
-      if (i <= task.completedSessions) {
-        // Cross out completed sessions
-        sessionsHTML += `<span class="session-marker completed-session">Session ${i}</span>`;
-      } else {
-        // Normal state for pending sessions
-        sessionsHTML += `<span class="session-marker">Session ${i}</span>`;
-      }
-    }
-    sessionsHTML += `</div>`;
-
-    metaDiv.innerHTML = `Focus: ${task.durationMinutes}m | Break: ${task.breakMinutes}m ${sessionsHTML}`;
-
-    detailsDiv.appendChild(nameSpan);
-    detailsDiv.appendChild(metaDiv);
-
-    const actionsDiv = document.createElement("div");
-    actionsDiv.className = "task-actions";
-
-    const loadBtn = document.createElement("button");
-    loadBtn.className = "btn-load";
-    loadBtn.textContent = "Load";
-
-    // Handle Fully Completed Tasks
-    if (task.completedSessions >= task.totalSessions) {
-      nameSpan.classList.add("fully-completed");
-      loadBtn.disabled = true;
-      loadBtn.textContent = "Done";
-      loadBtn.style.opacity = "0.5";
-      loadBtn.style.cursor = "not-allowed";
-    } else if (task.id === activeTaskId) {
-      // Prevent reloading the currently active task
-      loadBtn.disabled = true;
-      loadBtn.textContent = "Active";
-      loadBtn.style.opacity = "0.7";
-      loadBtn.style.cursor = "not-allowed";
-    } else {
-      loadBtn.onclick = () => loadTaskIntoTimer(task.id);
-    }
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "btn-delete";
-    deleteBtn.textContent = "X";
-    deleteBtn.title = "Delete Task";
-    deleteBtn.onclick = () => deleteTask(task.id);
-
-    actionsDiv.appendChild(loadBtn);
-    actionsDiv.appendChild(deleteBtn);
-
-    li.appendChild(detailsDiv);
-    li.appendChild(actionsDiv);
-
-    // Append to the DOM using the centralized dom object
-    dom.list.appendChild(li);
-  });
-}
-
-function loadTaskIntoTimer(id) {
+// --- LOAD TASK ---
+function loadTask(id) {
   pauseTimer();
   const task = tasks.find((t) => t.id === id);
   if (!task) return;
-
-  activeTaskId = id; // State is updated here
+  activeTaskId = id;
   currentMode = "focus";
-  dom.timer.section.classList.remove("break-mode");
-
   initialSeconds = task.durationMinutes * 60;
   currentSecondsLeft = initialSeconds;
-
-  updateTimerLabels();
-  updateTimerDisplay();
-
-  dom.timer.startBtn.disabled = false;
-  dom.timer.pauseBtn.disabled = true;
-  dom.timer.resetBtn.disabled = false;
-
-  // --- NEW ---
-  // Force the task list to redraw so the active button disables instantly
+  timerSection.classList.remove("break-mode");
+  ringFill.classList.remove("break");
+  startBtn.classList.remove("break-accent");
+  updateLabels();
+  renderTime(currentSecondsLeft);
+  updateRing(currentSecondsLeft, initialSeconds);
+  startBtn.disabled = false;
+  pauseBtn.disabled = true;
+  resetBtn.disabled = false;
   renderTasks();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function updateTimerLabels() {
-  const task = tasks.find((t) => t.id === activeTaskId);
-  if (task) {
-    dom.timer.activeLabel.textContent =
-      currentMode === "focus"
-        ? `🎯 Focusing on: ${task.name}`
-        : `☕ Break Time: ${task.name}`;
-    dom.timer.progressLabel.textContent = `Session ${task.completedSessions + 1} of ${task.totalSessions}`;
+// --- RENDER TASKS ---
+function renderTasks() {
+  taskListEl.innerHTML = "";
+  tasksCount.textContent =
+    tasks.length === 1 ? "1 task" : `${tasks.length} tasks`;
+  if (!tasks.length) {
+    taskListEl.innerHTML =
+      '<div class="empty-state"><p>Nothing here yet — add your first task</p></div>';
+    return;
   }
+  tasks.forEach((task) => {
+    const done = task.completedSessions >= task.totalSessions;
+    const isActive = task.id === activeTaskId;
+    const li = document.createElement("li");
+    li.className =
+      "task-item" + (isActive ? " is-active" : "") + (done ? " is-done" : "");
+
+    // Session pips
+    let pips = "";
+    for (let i = 0; i < task.totalSessions; i++) {
+      pips += `<div class="session-pip${i < task.completedSessions ? " done" : ""}"></div>`;
+    }
+
+    li.innerHTML = `
+        <div class="task-status-dot"></div>
+        <div class="task-main">
+          <div class="task-name">${task.name}</div>
+          <div class="task-meta">
+            <span class="meta-tag">${task.durationMinutes}m focus</span>
+            <span class="meta-tag">·</span>
+            <span class="meta-tag">${task.breakMinutes}m break</span>
+            <span class="meta-tag">·</span>
+            <span class="meta-tag">${task.completedSessions}/${task.totalSessions} rounds</span>
+          </div>
+          <div class="sessions-row">${pips}</div>
+        </div>
+        <div class="task-actions">
+          <button class="btn-task load" ${isActive || done ? "disabled" : ""} data-id="${task.id}">
+            ${done ? "Done" : isActive ? "Active" : "Load"}
+          </button>
+          <button class="btn-task del" data-del="${task.id}">✕</button>
+        </div>
+      `;
+    taskListEl.appendChild(li);
+  });
+
+  taskListEl
+    .querySelectorAll(".btn-task.load:not(:disabled)")
+    .forEach((btn) =>
+      btn.addEventListener("click", () => loadTask(parseInt(btn.dataset.id))),
+    );
+  taskListEl
+    .querySelectorAll(".btn-task.del")
+    .forEach((btn) =>
+      btn.addEventListener("click", () =>
+        deleteTask(parseInt(btn.dataset.del)),
+      ),
+    );
 }
 
-// --- High Precision Timer Logic ---
-function updateTimerDisplay() {
-  const minutes = Math.floor(currentSecondsLeft / 60);
-  const seconds = Math.ceil(currentSecondsLeft % 60); // Use ceil to prevent UI jumping to 0 early
-
-  dom.timer.display.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
+// --- TIMER LOGIC ---
+startBtn.addEventListener("click", startTimer);
+pauseBtn.addEventListener("click", pauseTimer);
+resetBtn.addEventListener("click", resetTimer);
 
 function startTimer() {
   if (activeTimerId !== null || currentSecondsLeft <= 0) return;
-
-  dom.timer.startBtn.disabled = true;
-  dom.timer.pauseBtn.disabled = false;
-
-  // Calculate the exact real-world time this timer should end
+  startBtn.disabled = true;
+  pauseBtn.disabled = false;
   expectedEndTime = Date.now() + currentSecondsLeft * 1000;
-
   activeTimerId = setInterval(() => {
-    // Calculate remaining time based on system clock, not interval loops
     const msLeft = expectedEndTime - Date.now();
     currentSecondsLeft = msLeft / 1000;
-
     if (currentSecondsLeft <= 0) {
       currentSecondsLeft = 0;
+      updateRing(0, initialSeconds);
+      renderTime(0);
       handleTimerComplete();
     } else {
-      updateTimerDisplay();
+      renderTime(currentSecondsLeft);
+      updateRing(currentSecondsLeft, initialSeconds);
     }
-  }, 250); // Run faster than 1s to ensure UI feels instantly responsive
+  }, 250);
 }
 
 function pauseTimer() {
@@ -360,45 +327,27 @@ function pauseTimer() {
     clearInterval(activeTimerId);
     activeTimerId = null;
     expectedEndTime = null;
-
-    // Snap to nearest whole second on pause
     currentSecondsLeft = Math.ceil(currentSecondsLeft);
-    updateTimerDisplay();
-
-    dom.timer.startBtn.disabled = false;
-    dom.timer.pauseBtn.disabled = true;
+    renderTime(currentSecondsLeft);
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
   }
 }
 
 function resetTimer() {
   pauseTimer();
   currentSecondsLeft = initialSeconds;
-  updateTimerDisplay();
-  dom.timer.startBtn.disabled = false;
-}
-
-// --- Modal & Flow Logic ---
-function showModal(title, message, btnText, onConfirm) {
-  dom.modal.title.textContent = title;
-  dom.modal.message.textContent = message;
-  dom.modal.btn.textContent = btnText;
-  dom.modal.overlay.classList.add("show");
-
-  dom.modal.btn.onclick = () => {
-    dom.modal.overlay.classList.remove("show");
-    if (onConfirm) onConfirm();
-  };
+  renderTime(currentSecondsLeft);
+  updateRing(currentSecondsLeft, initialSeconds);
+  startBtn.disabled = false;
 }
 
 function handleTimerComplete() {
   clearInterval(activeTimerId);
   activeTimerId = null;
-
-  // The .catch() prevents console errors if the browser blocks autoplay
-  alertSound.play().catch((err) => console.log("Audio blocked:", err));
-
-  dom.timer.resetBtn.disabled = true;
-  dom.timer.pauseBtn.disabled = true;
+  alertSound.play().catch(() => {});
+  pauseBtn.disabled = true;
+  resetBtn.disabled = true;
   const task = tasks.find((t) => t.id === activeTaskId);
   if (!task) return;
 
@@ -406,101 +355,75 @@ function handleTimerComplete() {
     task.completedSessions++;
     saveTasks();
     renderTasks();
-
     if (task.completedSessions >= task.totalSessions) {
       showModal(
-        "🎉 Task Complete!",
-        `You finished all ${task.totalSessions} sessions for: ${task.name}. Great job!`,
-        "Awesome",
+        "🎉",
+        "All done!",
+        `You crushed all ${task.totalSessions} rounds of "${task.name}". Excellent work.`,
+        "Finish",
         () => {
-          dom.timer.activeLabel.textContent = `✅ Complete: ${task.name}`;
-          dom.timer.progressLabel.textContent = "All sessions finished!";
-          dom.timer.startBtn.disabled = true;
+          taskLabel.innerHTML = `<strong>${task.name}</strong> — complete`;
+          sessionSub.textContent = "All rounds done";
+          startBtn.disabled = true;
         },
       );
     } else {
       showModal(
-        "☕ Focus Complete",
-        `Great job! You finished session ${task.completedSessions}. Time for a short break.`,
+        "☕",
+        "Focus complete!",
+        `Round ${task.completedSessions} done. Time for a ${task.breakMinutes}-min break.`,
         "Start Break",
         () => {
           currentMode = "break";
-          dom.timer.section.classList.add("break-mode");
           initialSeconds = task.breakMinutes * 60;
           currentSecondsLeft = initialSeconds;
-          updateTimerLabels();
-          updateTimerDisplay();
-
-          dom.timer.resetBtn.disabled = false;
+          updateLabels();
+          renderTime(currentSecondsLeft);
+          updateRing(currentSecondsLeft, initialSeconds);
+          resetBtn.disabled = false;
           startTimer();
         },
       );
     }
   } else {
     showModal(
-      "💪 Break Over",
-      "Your break is over. Ready to dive back into focus mode?",
-      "Start Next Session",
+      "💪",
+      "Break over",
+      `Ready for round ${task.completedSessions + 1} of "${task.name}"?`,
+      "Start Focus",
       () => {
         currentMode = "focus";
-        dom.timer.section.classList.remove("break-mode");
         initialSeconds = task.durationMinutes * 60;
         currentSecondsLeft = initialSeconds;
-        updateTimerLabels();
-        updateTimerDisplay();
-        dom.timer.resetBtn.disabled = false;
+        updateLabels();
+        renderTime(currentSecondsLeft);
+        updateRing(currentSecondsLeft, initialSeconds);
+        resetBtn.disabled = false;
         startTimer();
       },
     );
   }
-  dom.timer.pauseBtn.disabled = true;
 }
 
-function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker
-        .register("./sw.js")
-        .then((reg) => console.log("Service Worker Registered!", reg.scope))
-        .catch((err) =>
-          console.error("Service Worker Registration Failed:", err),
-        );
-    });
+// --- KEYBOARD ---
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || modalOverlay.classList.contains("show"))
+    return;
+  if (e.code === "Space") {
+    e.preventDefault();
+    activeTimerId ? pauseTimer() : !startBtn.disabled && startTimer();
+  }
+  if (e.code === "Escape" && !resetBtn.disabled) resetTimer();
+});
+
+// --- INIT ---
+async function init() {
+  try {
+    await initDB();
+    loadTasksFromDB();
+  } catch (e) {
+    tasks = [];
+    renderTasks();
   }
 }
-
-// --- Custom PWA Install Flow ---
-let deferredPrompt;
-const installBtn = document.getElementById("install-btn");
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  // Prevent the default mini-infobar from appearing
-  e.preventDefault();
-
-  // Stash the event so it can be triggered later
-  deferredPrompt = e;
-
-  // Remove the 'hidden' class to show our custom install button
-  installBtn.classList.remove("hidden");
-});
-
-installBtn.addEventListener("click", async () => {
-  if (!deferredPrompt) return;
-
-  // Show the native install prompt
-  deferredPrompt.prompt();
-
-  // Wait for the user to respond to the prompt
-  const { outcome } = await deferredPrompt.userChoice;
-
-  // Regardless of outcome (accepted or dismissed), hide the button and clear the prompt
-  installBtn.classList.add("hidden");
-  deferredPrompt = null;
-});
-
-// If the user successfully installs the app (even through the browser menu instead of our button)
-window.addEventListener("appinstalled", () => {
-  installBtn.classList.add("hidden");
-  deferredPrompt = null;
-  console.log("PWA installed successfully.");
-});
+init();
