@@ -46,11 +46,12 @@ A Pomodoro-style productivity timer that goes well beyond a basic countdown. Tas
 ## Project Structure
 
 ```
-index.html
-app.js
-style.css
-manifest.json
-sw.js
+Pomodoro-App /
+├── index.html       ← App shell, header, task list, modals
+├── style.css        ← Warm dark design system, animations, accessible custom inputs
+├── script.js        ← IndexedDB CRUD, ring logic, filter/sort, keyboard shortcuts
+├── sw.js            ← Cache-first service worker
+└── manifest.json    ← PWA metadata, icons, theme colour
 ```
 
 ---
