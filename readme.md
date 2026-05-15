@@ -67,7 +67,7 @@ sw.js
 ## Run Locally
 
 ```bash
-open pomodoro-timer.html
+open index.html
 # IndexedDB requires a browsing context — serve it if opening from filesystem causes issues
 npx serve .
 ```
